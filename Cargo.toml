@@ -1,0 +1,11 @@
+[package]
+authors = ["Lars Jellema <lars.jellema@gmail.com>"]
+edition = "2018"
+readme = "README.md"
+name = "async-heapless"
+version = "0.1.0"
+
+[dependencies.futures]
+version = "0.3.5"
+default-features = false
+features = [ "async-await" ]
