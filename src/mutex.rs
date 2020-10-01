@@ -1,3 +1,8 @@
+//! A mutual exclusion primitive based on async, for contexts without std or alloc.
+//!
+//! Tasks can .lock().await a Mutex to queue for exclusive access, first come first served. A task
+//! consumes a slot from the Mutex until its turn has passed. The Mutex has 16 slots available.
+
 use core::cell::UnsafeCell;
 use core::future::Future;
 use core::mem::MaybeUninit;
@@ -95,12 +100,11 @@ impl Slot {
     }
 }
 
-// front <= back
 pub struct Mutex<T> {
     value: UnsafeCell<T>,
     // The front of the queue contains the waker currently being woken.
     front: AtomicUsize,
-    // The back of the queue is where new wakers are added.
+    // The back of the queue is where new wakers are added. front <= back.
     back: AtomicUsize,
     slots: [Slot; CAPACITY],
 }
@@ -163,6 +167,7 @@ impl<T> Mutex<T> {
         &self.slots[i & (self.slots.len() - 1)]
     }
 
+    /// Return a future that can be awaited to obtain exclusive access to the underlying value.
     pub fn lock(&self) -> Lock<'_, T> {
         Lock {
             mutex: self,
@@ -192,6 +197,7 @@ impl<'a, T> Drop for Guard<'a, T> {
     }
 }
 
+/// A future that can be awaited to obtain exclusive access to the underlying value.
 pub struct Lock<'a, T> {
     mutex: &'a Mutex<T>,
     slot: Option<&'a Slot>,
@@ -212,11 +218,6 @@ impl<'a, T> Future for Lock<'a, T> {
         // is it safe to try to acquire the lock. If we allocate a slot earlier and then delay
         // awaiting the lock for a while, it is possible the lock's turn comes and isn't used until
         // much later, which means every other operation waiting for the lock is blocked.
-
-        // Rust async functions work differently from most languages: In most languages an async
-        // function will immediately begin making progress. For example, an async http request in
-        // javascript would immediately send its request so that by the time the result is awaited,
-        // there's a good chance it's ready immediately.
         let slot = self
             .slot
             .or_else(|| self.mutex.register())
