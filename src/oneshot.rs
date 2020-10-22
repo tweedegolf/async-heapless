@@ -5,6 +5,30 @@ use core::pin::Pin;
 use core::sync::atomic::Ordering;
 use core::task::{Context, Poll};
 
+// A few months ago, I was tasked to create a Rust async SPI driver for embedded devices. Async
+// support for Rust is a fairly new feature and support for it on embedded devices is even newer.
+// We found many common abstractions targeting async required either the standard library or at
+// least an allocator. In our embedded projects, we work without those, so building the SPI driver
+// included building some async primitives.
+
+// Ferrous Systems have also posted some async primitives in their post ["async/await on embedded
+// Rust"](https://ferrous-systems.com/blog/async-on-embedded/). They include an executor for async
+// tasks, an async mutex, channel and simple timer and an example async I2C driver targeting nRF52
+// devices. We are gladly making use of some of these, especially the executor.
+
+// Ferrous Systems were the first to make progress with this. In fact, it is in large part thanks
+// to them that async is now available on embedded devices. In their post ["async/await on embedded
+// Rust"](https://ferrous-systems.com/blog/async-on-embedded/), they showed a proof of concept
+// async embedded application, including an executor for async tasks, an async mutex, channel and
+// simple timer and an async I2C driver. These have been very useful to us.
+
+// We were still missing some things though: We'd need at least an async SPI driver and support for
+// multiple async delays based on a single timer. This is what we set out to build
+
+// - ferrous stuff is too hard to understand
+// - ferrous didn't make async spi
+// - ferrous' async i2c is tightly bound to hardware
+
 // TODO: intro; rust, async/await; no std; no alloc; asynchronous
 
 // A oneshot channel is a synchronization primitive used to send a single value from one task to
