@@ -13,7 +13,7 @@
 //! notifies the receiver. The receiver is a Rust async `Future` that can be `await`ed. Our
 //! implementation does not depend on std or alloc.
 //!
-//! See https://tweedegolf.nl/blog/TODO/async-oneshot for a full description of the internals.
+//! See https://tweedegolf.nl/blog/50/async-oneshot for a full description of the internals.
 
 // What do we mean by all that? First, not depending on std or alloc means we can't use many
 // common libraries. Rust async is still a new area and the libraries so far depend on
