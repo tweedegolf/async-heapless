@@ -8,12 +8,14 @@
 
 // First, our primitive:
 
-//! A oneshot channel is a synchronization primitive used to send a single message from one task to
-//! another. When the sender has sent a message and it is ready to be received, the oneshot
-//! notifies the receiver. The receiver is a Rust async `Future` that can be `await`ed. Our
-//! implementation does not depend on std or alloc.
+//! A oneshot channel is a synchronization primitive used to send a single
+//! message from one task to another. When the sender has sent a message and it
+//! is ready to be received, the oneshot notifies the receiver. The receiver is
+//! a Rust async `Future` that can be `await`ed. Our implementation does not
+//! depend on std or alloc.
 //!
-//! See https://tweedegolf.nl/blog/50/async-oneshot for a full description of the internals.
+//! See https://tweedegolf.nl/blog/50/async-oneshot for a full description of
+//! the internals.
 
 // What do we mean by all that? First, not depending on std or alloc means we can't use many
 // common libraries. Rust async is still a new area and the libraries so far depend on
@@ -50,11 +52,9 @@
 // directly if we wait for both the sender and receiver to be ready for the transfer: We'd know
 // where the data is on the sender side and where it should go on the receiver side. We call this
 // synchronous communication, both the sender and the receiver need to be ready before the
-// communication happens. It has its uses, but in this case, we don't want the the sender to wait
-// for the receiver since it won't get a response back anyway.
-// oneshot, one which allows the sender to forget about the message and do other things long before
-// the receiver is ready to receive it. So instead, we'll store the message in the `Oneshot` where
-// it can wait for the receiver to be ready.
+// communication happens. It has its uses, but in this case, we don't want the sender to wait for
+// the receiver since it won't get a response back anyway. Instead, we'll store the message in the
+// `Oneshot` where it can wait for the receiver to be ready.
 
 // We don't want to restrict our oneshot to just one kind of message, so we'll generalize it over
 // the type of the message. We'll call that type `T`. When we create a new `Oneshot` we won't have
@@ -110,8 +110,6 @@ pub struct Oneshot<T> {
 pub struct Sender<'a, T>(&'a Oneshot<T>);
 pub struct Receiver<'a, T>(&'a Oneshot<T>);
 
-// ### Implementation
-
 // It may seem like we're not going very fast but choosing the right data representation is often
 // the hardest part of programming. From a good data representation, the implementation will follow
 // naturally. We begin with the `new` function which allows the creation of a new `Oneshot`. We
@@ -125,6 +123,8 @@ impl<T> Oneshot<T> {
             has_message: AtomicBool::new(false),
         }
     }
+
+    // ### The unsafe
 
     // Next, we implement the most basic operations, putting a message in and taking it out again.
     // We'll get to synchronization later, so these will be unsafe functions. For performance
@@ -143,9 +143,10 @@ impl<T> Oneshot<T> {
 
     // Finally, we use the waker in order to schedule the receiving task to continue.
 
-    /// NOTE(unsafe): This function must not be used when the oneshot might contain a message or a
-    /// `Sender` exists referencing this oneshot. This means it can't be used concurrently with
-    /// itself or the latter to run will violate that constraint.
+    /// NOTE(unsafe): This function must not be used when the oneshot might
+    /// contain a message or a `Sender` exists referencing this oneshot. This
+    /// means it can't be used concurrently with itself or the latter to run
+    /// will violate that constraint.
     pub unsafe fn put(&self, message: T) {
         self.message.get().write(MaybeUninit::new(message));
         self.has_message.store(true, Ordering::Release);
@@ -171,8 +172,8 @@ impl<T> Oneshot<T> {
     // never expect either function to run more than once but a single message can be transferred
     // between tasks safely. Now to enforce that safety in the Rust type system.
 
-    /// NOTE(unsafe): This function must not be used concurrently with itself, but it can be used
-    /// concurrently with put.
+    /// NOTE(unsafe): This function must not be used concurrently with itself,
+    /// but it can be used concurrently with put.
     pub unsafe fn take(&self) -> Option<T> {
         if self.has_message.load(Ordering::Acquire) {
             let message = self.message.get().read().assume_init();
@@ -182,6 +183,8 @@ impl<T> Oneshot<T> {
             None
         }
     }
+
+    // ### The split
 
     // The `split` function splits the oneshot into a sender and a receiver. The sender can be used
     // to send one message and the receiver to receive one. The split function takes a unique
@@ -213,10 +216,11 @@ impl<T> Oneshot<T> {
     // we can be sure of that because `split` owns the unique reference to the `Oneshot` and so
     // nobody else could have a reference through which they could call `take`.
 
-    /// Split the Oneshot into a Sender and a Receiver. The Sender can send one message. The
-    /// Receiver is a Future and can be used to await that message. If the Receiver is dropped
-    /// before taking the message, the message is dropped as well. This function can be called
-    /// again after the lifetimes of the Sender and Receiver end in order to send a new message.
+    /// Split the Oneshot into a Sender and a Receiver. The Sender can send one
+    /// message. The Receiver is a Future and can be used to await that message.
+    /// If the Receiver is dropped before taking the message, the message is
+    /// dropped as well. This function can be called again after the lifetimes
+    /// of the Sender and Receiver end in order to send a new message.
     pub fn split<'a>(&'a mut self) -> (Sender<'a, T>, Receiver<'a, T>) {
         unsafe { self.take() };
         (Sender(self), Receiver(self))
@@ -227,14 +231,15 @@ impl<T> Oneshot<T> {
     // separately with functions marked unsafe. This allows a user to create a `Receiver` while
     // using `put` directly and preventing the overhead of a `Sender` for example.
 
-    /// NOTE(unsafe): There must be no more than one `Receiver` at a time. `take` should not be
-    /// called while a `Receiver` exists.
+    /// NOTE(unsafe): There must be no more than one `Receiver` at a time.
+    /// `take` should not be called while a `Receiver` exists.
     pub unsafe fn recv<'a>(&'a self) -> Receiver<'a, T> {
         Receiver(self)
     }
 
-    /// NOTE(unsafe): There must be no more than one `Sender` at a time. `put` should not be called
-    /// while a `Sender` exists. The `Oneshot` must be empty when the `Sender` is created.
+    /// NOTE(unsafe): There must be no more than one `Sender` at a time. `put`
+    /// should not be called while a `Sender` exists. The `Oneshot` must be
+    /// empty when the `Sender` is created.
     pub unsafe fn send<'a>(&'a self) -> Sender<'a, T> {
         Sender(self)
     }
@@ -269,6 +274,8 @@ impl<'a, T> Sender<'a, T> {
         unsafe { self.0.put(message) };
     }
 }
+
+// ### The future
 
 // The receiver we get from `split` is a future that can be awaited for the message being sent.
 // This is the last tricky bit in our implementation. A `Future` is a thing with a `poll` function
@@ -322,6 +329,8 @@ impl<'a, T> Drop for Receiver<'a, T> {
     }
 }
 
+// ### That's it
+
 // And that wraps up the implementation of our oneshot. Not too bad, right? Hopefully you have a
 // good idea now about what goes into a concurrency primitive. The code for this blog is available
 // at https://github.com/tweedegolf/async-heapless so please create an issue or pull request if
@@ -333,7 +342,7 @@ impl<'a, T> Drop for Receiver<'a, T> {
 // channel with a capacity of one message where the sender and receiver can be used multiple times
 // and the sender can block until there is space in the channel. After that, you could look into
 // channels that can store multiple messages or allow multiple concurrent senders or receivers. Or
-// maybe you want build a primitive where both tasks wait for each other and then exchange
+// maybe you want to build a primitive where both tasks wait for each other and then exchange
 // messages at the same time. Just make sure you don't try to add everything at once, each of those
 // things is hard enough on its own.
 
