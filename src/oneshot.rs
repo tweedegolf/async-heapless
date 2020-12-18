@@ -248,10 +248,10 @@ impl<T> Oneshot<T> {
     // ordinarily not be useful since the send would know whether it has sent anything and the
     // point of the receiver is that it finds out when it tries to receive. It is still useful for
     // debugging and assertions however. Since we don't know what is being checked exactly and the
-    // performance of debugging is not an issue, we should use the `AcqRel` ordering here.
+    // performance of debugging is not an issue, we should use the `Acquire` ordering here.
 
     pub fn is_empty(&self) -> bool {
-        !self.has_message.load(Ordering::AcqRel)
+        !self.has_message.load(Ordering::Acquire)
     }
 }
 
